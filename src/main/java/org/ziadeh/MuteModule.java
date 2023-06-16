@@ -1,6 +1,5 @@
 package org.ziadeh;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonSyntaxException;
@@ -11,14 +10,12 @@ import me.lucko.helper.gson.GsonProvider;
 import me.lucko.helper.gson.JsonBuilder;
 import me.lucko.helper.terminable.TerminableConsumer;
 import me.lucko.helper.terminable.module.TerminableModule;
-import me.lucko.helper.text3.Text;
 import me.lucko.helper.time.DurationFormatter;
 import me.lucko.helper.utils.Players;
+import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
-import org.ziadeh.DevRoomPlugin;
-import org.ziadeh.MutedPlayer;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
@@ -27,7 +24,9 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -36,12 +35,8 @@ import java.util.concurrent.TimeUnit;
 
 public class MuteModule implements TerminableModule {
 
+    private Map<UUID, MutedPlayer> mutedPlayerData = new HashMap<>();
     private DevRoomPlugin plugin;
-
-    // hashmap for quick access
-    private Map<UUID, MutedPlayer> mutedPlayerData;
-
-    // json file storage
     private Path dataFile;
 
     public MuteModule(DevRoomPlugin plugin) {
@@ -124,7 +119,7 @@ public class MuteModule implements TerminableModule {
                         event.setCancelled(true);
 
                         // Notify the player
-                        Players.msg(player, "&cYou cannot speak, you are muted for another: &f" + timeRemaining);
+                        Players.msg(player, "&cYou cannot speak, you are muted for another: &7" + timeRemaining);
                     });
                 }).bindWith(consumer);
 
@@ -154,6 +149,7 @@ public class MuteModule implements TerminableModule {
     }
 
     public void mutePlayer(Player player, CommandSender sender, String reason, Duration duration, boolean confirm) {
+        String durationFormat = DurationFormatter.format(duration, true);
         UUID uuid = player.getUniqueId();
         if(confirm && sender instanceof Player) {
             MuteConfirmationMenu confirmMenu = new MuteConfirmationMenu((Player) sender, player, duration, reason);
@@ -167,8 +163,8 @@ public class MuteModule implements TerminableModule {
         mutedPlayerData.put(uuid, data);
 
         // Notify sender and receiver
-        Players.msg(sender, "&aMuted &7" + player.getName() + "&a for &7" + duration + " - &a" + reason);
-        Players.msg(player, "&cYou have been muted by &7" + sender.getName() + "&c for &7" + duration + " - &c" + reason);
+        Players.msg(sender, "&aMuted &7" + player.getName() + "&a for &7" + durationFormat + " - &a" + reason);
+        Players.msg(player, "&cYou have been muted by &7" + sender.getName() + "&c for &7" + durationFormat + " - &c" + reason);
     }
 
     public Map<UUID, MutedPlayer> getMutedPlayerData() {
@@ -185,6 +181,28 @@ public class MuteModule implements TerminableModule {
     }
 
     public Duration getDuration(String duration) {
-        return null;
+        duration = duration.toUpperCase();
+        String format;
+
+        // Handle Month Input
+        if(duration.endsWith("MO")) {
+            int months = Integer.parseInt(duration.substring(0, duration.length() - 2));
+            int days = 30 * months;
+            return Duration.ofDays(days);
+        }
+
+        // Format into ISO-8601
+        if(duration.charAt(1) == 'D') {
+            format = "P" + duration.substring(0, 2) + "T" + duration.substring(2);
+        } else {
+            format = "PT" + duration;
+        }
+
+        // Attempt to parse and return
+        try {
+            return Duration.parse(format);
+        } catch (DateTimeParseException error) {
+            return null;
+        }
     }
 }

@@ -5,7 +5,9 @@ import me.lucko.helper.menu.Gui;
 import me.lucko.helper.menu.Item;
 import me.lucko.helper.menu.scheme.MenuPopulator;
 import me.lucko.helper.menu.scheme.MenuScheme;
+import me.lucko.helper.time.DurationFormatter;
 import org.bukkit.Material;
+import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 
 import java.time.Duration;
@@ -38,10 +40,6 @@ public class MuteConfirmationMenu extends Gui {
         this.onAccept = onAccept;
     }
 
-    public void onDecline(Consumer<Gui> onDecline) {
-        this.onDecline = onDecline;
-    }
-
     @Override
     public void redraw() {
         if(isFirstDraw()) {
@@ -58,7 +56,7 @@ public class MuteConfirmationMenu extends Gui {
                     .lore("&7Click to cancel this mute.")
                     .build(() -> {
                         close();
-                        onDecline.accept(this);
+                        getPlayer().playSound(getPlayer(), Sound.BLOCK_ANVIL_PLACE, 0.5f, 1f);
                     });
 
             Item accept  = ItemStackBuilder.of(Material.LIME_STAINED_GLASS_PANE)
@@ -67,11 +65,12 @@ public class MuteConfirmationMenu extends Gui {
                     .build(() -> {
                         close();
                         onAccept.accept(this);
+                        getPlayer().playSound(getPlayer(), Sound.ENTITY_PLAYER_LEVELUP, 0.5f, 1f);
                     });
 
             Item info = ItemStackBuilder.of(Material.PAPER)
                     .name("Mute " + target.getName())
-                    .lore("&fDuration: &c" + duration)
+                    .lore("&fDuration: &c" + (duration.toDays() >= 100000 ? "Permanent" : DurationFormatter.format(duration, true)))
                     .lore("&fReason: &c" + reason)
                     .buildItem().build();
 

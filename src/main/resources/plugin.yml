@@ -1,6 +1,7 @@
 name: DevRoomPlugin
 version: 0.0.1
 main: org.ziadeh.DevRoomPlugin
+api-version: 1.18
 commands:
   mute:
     description: "Mutes a player"

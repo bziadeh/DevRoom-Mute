@@ -1,0 +1,6 @@
+database-credentials:
+  address: "localhost"
+  port: 3306
+  database: "minecraft"
+  username: "root"
+  password: "password"

@@ -1,0 +1,8 @@
+name: DevRoomPlugin
+version: 0.0.1
+main: org.ziadeh.DevRoomPlugin
+commands:
+  mute:
+    description: "Mutes a player"
+  unmute:
+    description: "Unmutes a player"

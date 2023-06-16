@@ -12,6 +12,7 @@ import me.lucko.helper.gson.JsonBuilder;
 import me.lucko.helper.terminable.TerminableConsumer;
 import me.lucko.helper.terminable.module.TerminableModule;
 import me.lucko.helper.text3.Text;
+import me.lucko.helper.time.DurationFormatter;
 import me.lucko.helper.utils.Players;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -36,9 +37,11 @@ import java.util.concurrent.TimeUnit;
 public class MuteModule implements TerminableModule {
 
     private DevRoomPlugin plugin;
+
+    // hashmap for quick access
     private Map<UUID, MutedPlayer> mutedPlayerData;
 
-    // json file
+    // json file storage
     private Path dataFile;
 
     public MuteModule(DevRoomPlugin plugin) {
@@ -55,7 +58,6 @@ public class MuteModule implements TerminableModule {
             try {
                 String jsonString = new String(Files.readAllBytes(dataFile));
                 JsonArray array = GsonProvider.prettyPrinting().fromJson(jsonString, JsonElement.class).getAsJsonArray();
-
                 for (JsonElement element : array) {
                     MutedPlayer result = MutedPlayer.deserialize(element);
                     mutedPlayerData.put(result.getUuid(), result);
@@ -73,7 +75,7 @@ public class MuteModule implements TerminableModule {
                     // Mute with no duration or reason specified
                     String durationString = command.arg(1).parse(String.class).orElse(null);
                     if(durationString == null) {
-                        mutePlayer(target, command.sender(), "None Specified", Duration.ofDays(100000));
+                        mutePlayer(target, command.sender(), "None Specified", Duration.ofDays(100000), true);
                         return;
                     }
                     // Check for invalid duration format
@@ -84,7 +86,7 @@ public class MuteModule implements TerminableModule {
                     }
                     // Mute the player!
                     String reason = command.arg(2).parse(String.class).orElse("None Specified");
-                    mutePlayer(target, command.sender(), reason, duration);
+                    mutePlayer(target, command.sender(), reason, duration, true);
                 }).registerAndBind(consumer, "mute");
 
         // Unmute Command
@@ -106,16 +108,24 @@ public class MuteModule implements TerminableModule {
 
         // Prevent Chat
         Events.subscribe(AsyncPlayerChatEvent.class)
-                .filter(event -> isMuted(event.getPlayer()))
                 .handler(event -> {
+                    final Player player = event.getPlayer();
+                    getMuteData(player).ifPresent(data -> {
+                        Duration duration = data.getMuteDuration();
+                        Instant date = data.getMuteDate();
 
-                    // Check if enough time has elapsed since the player
-                    // has been muted.
-                    getMuteData(event.getPlayer()).ifPresent(data -> {
+                        // Check if enough time has elapsed
+                        Duration elapsed = Duration.between(date, Instant.now());
+                        if(elapsed.compareTo(duration) > 0) {
+                            mutedPlayerData.remove(player.getUniqueId());
+                            return;
+                        }
+                        String timeRemaining = DurationFormatter.format(duration.minus(elapsed), true);
+                        event.setCancelled(true);
 
-
+                        // Notify the player
+                        Players.msg(player, "&cYou cannot speak, you are muted for another: &f" + timeRemaining);
                     });
-
                 }).bindWith(consumer);
 
         // Save our data every five minutes
@@ -143,8 +153,14 @@ public class MuteModule implements TerminableModule {
         }
     }
 
-    public void mutePlayer(Player player, CommandSender sender, String reason, Duration duration) {
+    public void mutePlayer(Player player, CommandSender sender, String reason, Duration duration, boolean confirm) {
         UUID uuid = player.getUniqueId();
+        if(confirm && sender instanceof Player) {
+            MuteConfirmationMenu confirmMenu = new MuteConfirmationMenu((Player) sender, player, duration, reason);
+            confirmMenu.onAccept(gui -> mutePlayer(player, sender, reason, duration, false));
+            confirmMenu.open();
+            return;
+        }
 
         // Add the player to our map
         MutedPlayer data = new MutedPlayer(uuid, reason, sender.getName(), Instant.now(), duration);
@@ -156,6 +172,7 @@ public class MuteModule implements TerminableModule {
     }
 
     public Map<UUID, MutedPlayer> getMutedPlayerData() {
+        // read-only
         return Collections.unmodifiableMap(mutedPlayerData);
     }
 
